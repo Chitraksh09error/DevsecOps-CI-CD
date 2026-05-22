@@ -1,151 +1,152 @@
-pipeline {
-    agent any
+    pipeline {
+        agent any
 
-    tools {
-        nodejs "node20"
-    }
-
-    environment {
-        IMAGE_NAME = "myapp"
-        SONAR_HOST = "http://host.docker.internal:9000"
-    }
-
-    stages {
-
-        stage('Checkout Code') {
-            steps {
-                git url: 'https://github.com/Chitraksh09error/DevsecOps-CI-CD.git', branch: 'main'
-            }
+        tools {
+            nodejs "node20"
+            sonarScanner 'sonar-scanner'
         }
 
-        stage('Node Setup') {
-            steps {
-                sh '''
-                    node -v
-                    npm -v
-                    npm install
-                '''
-            }
+        environment {
+            IMAGE_NAME = "myapp"
+            SONAR_HOST = "http://host.docker.internal:9000"
         }
 
-       stage('SonarQube Scan') {
-    steps {
-        withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-            withSonarQubeEnv('SonarQube') {
-                sh '''
-                    sonar-scanner \
-                    -Dsonar.projectKey=myapp \
-                    -Dsonar.sources=. \
-                    -Dsonar.host.url=http://host.docker.internal:9000 \
-                    -Dsonar.login=$SONAR_TOKEN
-                '''
-            }
-        }
-    }
-}
+        stages {
 
-        stage('Dependency Scan (Trivy FS)') {
-            steps {
-                sh '''
-                    trivy fs . > dependency-report.txt || true
-                '''
+            stage('Checkout Code') {
+                steps {
+                    git url: 'https://github.com/Chitraksh09error/DevsecOps-CI-CD.git', branch: 'main'
+                }
             }
-        }
 
-        stage('Secret Scan') {
-            steps {
-                sh '''
-                    trivy fs --scanners secret . > secret-report.txt || true
-                '''
+            stage('Node Setup') {
+                steps {
+                    sh '''
+                        node -v
+                        npm -v
+                        npm install
+                    '''
+                }
             }
-        }
 
-        stage('IaC Scan (Checkov)') {
-            steps {
-                sh '''
-                    checkov -d . > checkov-report.txt || true
-                '''
-            }
-        }
-
-        stage('Docker Build') {
-            steps {
-                sh '''
-                    docker build -t $IMAGE_NAME:latest .
-                '''
-            }
-        }
-
-        stage('Container Scan (Trivy Image)') {
-            steps {
-                sh '''
-                    trivy image $IMAGE_NAME:latest > container-report.txt || true
-                '''
-            }
-        }
-
-        stage('Policy Gate') {
-            steps {
-                sh '''
-                    echo "Checking for CRITICAL vulnerabilities..."
-                    if grep -q "CRITICAL" container-report.txt; then
-                        echo "❌ CRITICAL vulnerabilities found"
-                        exit 1
-                    else
-                        echo "✅ No critical issues found"
-                    fi
-                '''
-            }
-        }
-
-        stage('Deploy to Dev') {
-            steps {
-                sh '''
-                    kubectl apply -f kubernetes/dev/deployment.yaml
-                '''
-            }
-        }
-
-        stage('Approval for Staging') {
-            steps {
-                input message: 'Deploy to staging?'
-            }
-        }
-
-        stage('Deploy to Staging') {
-            steps {
-                sh '''
-                    kubectl apply -f kubernetes/staging/deployment.yaml
-                '''
-            }
-        }
-
-        stage('Approval for Production') {
-            steps {
-                input message: 'Deploy to production?'
-            }
-        }
-
-        stage('Deploy to Production') {
-            steps {
-                sh '''
-                    kubectl apply -f kubernetes/prod/deployment.yaml
-                '''
+        stage('SonarQube Scan') {
+        steps {
+            withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                withSonarQubeEnv('SonarQube') {
+                    sh '''
+                        sonar-scanner \
+                        -Dsonar.projectKey=myapp \
+                        -Dsonar.sources=. \
+                        -Dsonar.host.url=http://host.docker.internal:9000 \
+                        -Dsonar.login=$SONAR_TOKEN
+                    '''
+                }
             }
         }
     }
 
-    post {
-        success {
-            echo "✅ Pipeline SUCCESS"
+            stage('Dependency Scan (Trivy FS)') {
+                steps {
+                    sh '''
+                        trivy fs . > dependency-report.txt || true
+                    '''
+                }
+            }
+
+            stage('Secret Scan') {
+                steps {
+                    sh '''
+                        trivy fs --scanners secret . > secret-report.txt || true
+                    '''
+                }
+            }
+
+            stage('IaC Scan (Checkov)') {
+                steps {
+                    sh '''
+                        checkov -d . > checkov-report.txt || true
+                    '''
+                }
+            }
+
+            stage('Docker Build') {
+                steps {
+                    sh '''
+                        docker build -t $IMAGE_NAME:latest .
+                    '''
+                }
+            }
+
+            stage('Container Scan (Trivy Image)') {
+                steps {
+                    sh '''
+                        trivy image $IMAGE_NAME:latest > container-report.txt || true
+                    '''
+                }
+            }
+
+            stage('Policy Gate') {
+                steps {
+                    sh '''
+                        echo "Checking for CRITICAL vulnerabilities..."
+                        if grep -q "CRITICAL" container-report.txt; then
+                            echo "❌ CRITICAL vulnerabilities found"
+                            exit 1
+                        else
+                            echo "✅ No critical issues found"
+                        fi
+                    '''
+                }
+            }
+
+            stage('Deploy to Dev') {
+                steps {
+                    sh '''
+                        kubectl apply -f kubernetes/dev/deployment.yaml
+                    '''
+                }
+            }
+
+            stage('Approval for Staging') {
+                steps {
+                    input message: 'Deploy to staging?'
+                }
+            }
+
+            stage('Deploy to Staging') {
+                steps {
+                    sh '''
+                        kubectl apply -f kubernetes/staging/deployment.yaml
+                    '''
+                }
+            }
+
+            stage('Approval for Production') {
+                steps {
+                    input message: 'Deploy to production?'
+                }
+            }
+
+            stage('Deploy to Production') {
+                steps {
+                    sh '''
+                        kubectl apply -f kubernetes/prod/deployment.yaml
+                    '''
+                }
+            }
         }
 
-        failure {
-            echo "❌ Pipeline FAILED — check logs"
-        }
+        post {
+            success {
+                echo "✅ Pipeline SUCCESS"
+            }
 
-        always {
-            echo "Pipeline completed"
+            failure {
+                echo "❌ Pipeline FAILED — check logs"
+            }
+
+            always {
+                echo "Pipeline completed"
+            }
         }
     }
-}
