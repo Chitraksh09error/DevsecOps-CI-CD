@@ -7,13 +7,24 @@ pipeline {
 
     environment {
         IMAGE_NAME = "myapp"
+        SONAR_HOST = "http://host.docker.internal:9000"
     }
 
     stages {
 
         stage('Checkout Code') {
             steps {
-                git 'https://github.com/Chitraksh09error/DevsecOps-CI-CD.git'
+                git url: 'https://github.com/Chitraksh09error/DevsecOps-CI-CD.git', branch: 'main'
+            }
+        }
+
+        stage('Node Setup') {
+            steps {
+                sh '''
+                    node -v
+                    npm -v
+                    npm install
+                '''
             }
         }
 
@@ -23,50 +34,63 @@ pipeline {
                     sh '''
                         sonar-scanner \
                         -Dsonar.projectKey=myapp \
-                        -Dsonar.sources=src \
-                        -Dsonar.host.url=http://host.docker.internal:9000 \
+                        -Dsonar.sources=. \
+                        -Dsonar.host.url=$SONAR_HOST \
                         -Dsonar.login=$SONAR_TOKEN
                     '''
                 }
             }
         }
 
-        stage('Dependency Scan') {
+        stage('Dependency Scan (Trivy FS)') {
             steps {
-                sh 'trivy fs . > dependency-report.txt || true'
+                sh '''
+                    trivy fs . > dependency-report.txt || true
+                '''
             }
         }
 
         stage('Secret Scan') {
             steps {
-                sh 'trivy fs --scanners secret . > secret-report.txt || true'
+                sh '''
+                    trivy fs --scanners secret . > secret-report.txt || true
+                '''
             }
         }
 
-        stage('IaC Scan') {
+        stage('IaC Scan (Checkov)') {
             steps {
-                sh 'checkov -d . > checkov-report.txt || true'
+                sh '''
+                    checkov -d . > checkov-report.txt || true
+                '''
             }
         }
 
         stage('Docker Build') {
             steps {
-                sh 'docker build -t $IMAGE_NAME .'
+                sh '''
+                    docker build -t $IMAGE_NAME:latest .
+                '''
             }
         }
 
-        stage('Container Scan') {
+        stage('Container Scan (Trivy Image)') {
             steps {
-                sh 'trivy image $IMAGE_NAME > container-report.txt || true'
+                sh '''
+                    trivy image $IMAGE_NAME:latest > container-report.txt || true
+                '''
             }
         }
 
         stage('Policy Gate') {
             steps {
                 sh '''
-                    if grep -q CRITICAL container-report.txt; then
-                        echo "Critical vulnerabilities found"
+                    echo "Checking for CRITICAL vulnerabilities..."
+                    if grep -q "CRITICAL" container-report.txt; then
+                        echo "❌ CRITICAL vulnerabilities found"
                         exit 1
+                    else
+                        echo "✅ No critical issues found"
                     fi
                 '''
             }
@@ -74,32 +98,52 @@ pipeline {
 
         stage('Deploy to Dev') {
             steps {
-                sh 'kubectl apply -f kubernetes/dev/deployment.yaml'
+                sh '''
+                    kubectl apply -f kubernetes/dev/deployment.yaml
+                '''
             }
         }
 
         stage('Approval for Staging') {
             steps {
-                input 'Deploy to staging?'
+                input message: 'Deploy to staging?'
             }
         }
 
         stage('Deploy to Staging') {
             steps {
-                sh 'kubectl apply -f kubernetes/staging/deployment.yaml'
+                sh '''
+                    kubectl apply -f kubernetes/staging/deployment.yaml
+                '''
             }
         }
 
         stage('Approval for Production') {
             steps {
-                input 'Deploy to production?'
+                input message: 'Deploy to production?'
             }
         }
 
         stage('Deploy to Production') {
             steps {
-                sh 'kubectl apply -f kubernetes/prod/deployment.yaml'
+                sh '''
+                    kubectl apply -f kubernetes/prod/deployment.yaml
+                '''
             }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Pipeline SUCCESS"
+        }
+
+        failure {
+            echo "❌ Pipeline FAILED — check logs"
+        }
+
+        always {
+            echo "Pipeline completed"
         }
     }
 }
