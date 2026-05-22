@@ -30,7 +30,7 @@
 
         stage('SonarQube Scan') {
     steps {
-        withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+        withCredentials([string(credentialsId: 'sonar-token', variable: 'sonarToken')]) {
             script {
                 def scannerHome = tool 'sonar-scanner'
 
@@ -39,7 +39,7 @@
                 -Dsonar.projectKey=socialsapp \
                 -Dsonar.sources=. \
                 -Dsonar.host.url=http://host.docker.internal:9000 \
-                -Dsonar.login=$SONAR_TOKEN
+                -Dsonar.login=$sonarToken
                 """
             }
         }
