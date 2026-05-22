@@ -3,7 +3,6 @@
 
         tools {
             nodejs "node20"
-            sonarScanner 'sonar-scanner'
         }
 
         environment {
