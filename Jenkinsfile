@@ -28,16 +28,18 @@ pipeline {
             }
         }
 
-        stage('SonarQube Scan') {
+       stage('SonarQube Scan') {
     steps {
         withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-            sh '''
-                sonar-scanner \
-                -Dsonar.projectKey=myapp \
-                -Dsonar.sources=. \
-                -Dsonar.host.url=http://host.docker.internal:9000 \
-                -Dsonar.login=$SONAR_TOKEN
-            '''
+            withSonarQubeEnv('SonarQube') {
+                sh '''
+                    sonar-scanner \
+                    -Dsonar.projectKey=myapp \
+                    -Dsonar.sources=. \
+                    -Dsonar.host.url=http://host.docker.internal:9000 \
+                    -Dsonar.login=$SONAR_TOKEN
+                '''
+            }
         }
     }
 }
