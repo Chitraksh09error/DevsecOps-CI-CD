@@ -30,20 +30,22 @@
             }
 
         stage('SonarQube Scan') {
-        steps {
-            withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                withSonarQubeEnv('SonarQube') {
-                    sh '''
-                        sonar-scanner \
-                        -Dsonar.projectKey=myapp \
-                        -Dsonar.sources=. \
-                        -Dsonar.host.url=http://host.docker.internal:9000 \
-                        -Dsonar.login=$SONAR_TOKEN
-                    '''
-                }
+    steps {
+        withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+            script {
+                def scannerHome = tool 'sonar-scanner'
+
+                sh """
+                ${scannerHome}/bin/sonar-scanner \
+                -Dsonar.projectKey=socialsapp \
+                -Dsonar.sources=. \
+                -Dsonar.host.url=http://host.docker.internal:9000 \
+                -Dsonar.login=$SONAR_TOKEN
+                """
             }
         }
     }
+}
 
             stage('Dependency Scan (Trivy FS)') {
                 steps {
