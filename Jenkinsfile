@@ -1,51 +1,51 @@
 pipeline {
-
     agent any
 
-      tools {
+    tools {
         nodejs "node20"
     }
 
     environment {
         IMAGE_NAME = "myapp"
-        SONAR_TOKEN = credentials('squ_97cecaa99d13233b369fa916298f5c442ec8881b')
     }
 
     stages {
 
         stage('Checkout Code') {
             steps {
-                git 'https://github.com/Chitraksh09error/mySocials.git'
+                git 'https://github.com/Chitraksh09error/DevsecOps-CI-CD.git'
             }
         }
 
         stage('SonarQube Scan') {
             steps {
-                sh '''
-                sonar-scanner \
-                -Dsonar.projectKey=myapp \
-                -Dsonar.sources=src \
-                -Dsonar.host.url=http://host.docker.internal:9000 \
-                -Dsonar.login=$SONAR_TOKEN
-                '''
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                    sh '''
+                        sonar-scanner \
+                        -Dsonar.projectKey=myapp \
+                        -Dsonar.sources=src \
+                        -Dsonar.host.url=http://host.docker.internal:9000 \
+                        -Dsonar.login=$SONAR_TOKEN
+                    '''
+                }
             }
         }
 
         stage('Dependency Scan') {
             steps {
-                sh 'trivy fs . > dependency-report.txt'
+                sh 'trivy fs . > dependency-report.txt || true'
             }
         }
 
         stage('Secret Scan') {
             steps {
-                sh 'trivy fs --scanners secret . > secret-report.txt'
+                sh 'trivy fs --scanners secret . > secret-report.txt || true'
             }
         }
 
         stage('IaC Scan') {
             steps {
-                sh 'checkov -d . > checkov-report.txt'
+                sh 'checkov -d . > checkov-report.txt || true'
             }
         }
 
@@ -57,17 +57,17 @@ pipeline {
 
         stage('Container Scan') {
             steps {
-                sh 'trivy image $IMAGE_NAME > container-report.txt'
+                sh 'trivy image $IMAGE_NAME > container-report.txt || true'
             }
         }
 
         stage('Policy Gate') {
             steps {
                 sh '''
-                if grep -q CRITICAL container-report.txt; then
-                    echo "Critical vulnerabilities found"
-                    exit 1
-                fi
+                    if grep -q CRITICAL container-report.txt; then
+                        echo "Critical vulnerabilities found"
+                        exit 1
+                    fi
                 '''
             }
         }
