@@ -7,7 +7,6 @@
 
         environment {
             IMAGE_NAME = "myapp"
-            SONAR_HOST = "http://host.docker.internal:9000"
         }
 
         stages {
